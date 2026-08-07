@@ -1,0 +1,36 @@
+{
+  "page": {
+    "title": "URL Proxies",
+    "inputPlaceholder": "Enter URL (e.g. https://example.com or tor.onion domain)",
+    "addButton": "Add",
+    "labels": {
+      "unselected": "(unselected)"
+    },
+    "tooltips": {
+      "add": "New URL Proxy",
+      "delete": "Delete this URL proxy",
+      "autoSelectOn": "Auto-select ON: auto-selects the lowest-latency node after testing (click to turn off)",
+      "autoSelectOff": "Auto-select OFF: click to enable auto-selecting the lowest-latency node after testing",
+      "pageInfo": "URL Proxies: create a dedicated proxy group for a specific URL, select a node manually or enable auto-select for the lowest-latency node"
+    },
+    "placeholders": {
+      "filter": "Filter by name"
+    }
+  },
+  "messages": {
+    "noProxies": "No proxies available. Please upload a subscription first."
+  },
+  "notices": {
+    "addSuccess": "URL proxy group created successfully",
+    "addFail": "Failed to create URL proxy group",
+    "testSuccess": "Speed test completed, selected the lowest latency node",
+    "testFail": "Speed test failed or no valid nodes",
+    "testAllSuccess": "All tested. Auto-selected the lowest latency node for {{count}} URL(s)",
+    "selectSuccess": "Proxy selected successfully",
+    "selectFail": "Failed to select proxy",
+    "deleteSuccess": "URL proxy deleted",
+    "empty": "Enter a URL above and click \"Add\" to create a dedicated proxy group for it",
+    "emptyHint": "Supports regular URLs and Tor (.onion) domains",
+    "torHint": "For Tor URLs, please configure a Tor SOCKS5 proxy in your subscription nodes first"
+  }
+}

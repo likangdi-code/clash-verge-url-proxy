@@ -1,0 +1,36 @@
+{
+  "page": {
+    "title": "网址代理",
+    "inputPlaceholder": "输入网址 (例如: https://example.com 或 tor.onion 域名)",
+    "addButton": "新建",
+    "labels": {
+      "unselected": "(未选择)"
+    },
+    "tooltips": {
+      "add": "新建网址代理",
+      "delete": "删除此网址代理",
+      "autoSelectOn": "自动选择已开启：测速后自动选择延迟最低的节点（点击关闭）",
+      "autoSelectOff": "自动选择已关闭：点击开启，测速后自动选择延迟最低的节点",
+      "pageInfo": "网址代理：为指定网址创建专属代理组，可单独选择节点或开启自动选择延迟最低节点"
+    },
+    "placeholders": {
+      "filter": "过滤节点（按名称）"
+    }
+  },
+  "messages": {
+    "noProxies": "暂无可用节点，请先导入订阅"
+  },
+  "notices": {
+    "addSuccess": "网址代理组创建成功",
+    "addFail": "创建网址代理组失败",
+    "testSuccess": "测速完成，已选择延迟最低的节点",
+    "testFail": "测速失败或无可用节点",
+    "testAllSuccess": "全部测速完成，已为 {{count}} 个网址自动选择最低延迟节点",
+    "selectSuccess": "节点选择成功",
+    "selectFail": "节点选择失败",
+    "deleteSuccess": "网址代理已删除",
+    "empty": "在上方输入网址，点击「新建」即可为此网址创建专属代理组",
+    "emptyHint": "支持普通网址和 Tor (.onion) 域名",
+    "torHint": "使用 Tor 网址时，请在订阅节点中预先配置好 Tor SOCKS5 代理"
+  }
+}
