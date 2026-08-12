@@ -17,6 +17,7 @@ CLAUDE.md
 .vfox.toml
 .vfox
 .claude
+.codebuddy
 AGENTS.md
 .zed
 build.log
