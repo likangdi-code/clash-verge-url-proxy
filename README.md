@@ -12,7 +12,7 @@
 
 Clash Verge 是一款基于 **Rust + Tauri 2** 的 [Clash Meta (mihomo)](https://github.com/MetaCubeX/mihomo) 图形化客户端，简洁高效，支持系统代理、TUN 虚拟网卡、配置文件增强（Merge / Script）等功能。
 
-> 本项目是官方 [clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev) 的定制分支，官方版本的原有功能与本版完全一致，本版额外提供 **「网址代理」** 功能。
+> 本项目是官方 [clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev) 的定制分支，官方版本的原有功能与本版完全一致，本版额外提供 **「网址代理」** 功能，并内置一条**命令桥**，让外部 CLI（如 [Clash Pick](https://github.com/likangdi-code/clash-pick)）也能自动化建组。
 
 ## Preview
 
@@ -37,20 +37,32 @@ Clash Verge 是一款基于 **Rust + Tauri 2** 的 [Clash Meta (mihomo)](https:/
 - **持久化**：网址与节点映射保存在本地，跨环境自动从订阅增强文件恢复。
 - **不干扰代理页**：`URL-Proxy-*` 组已被过滤，「代理」页显示不受影响。
 
-## 配套工具：Clash Pick CLI
+## 与 Clash Pick CLI 联合使用
 
-[Clash Pick](https://github.com/likangdi-code/clash-pick) 是本仓库「网址代理」功能的 **CLI 配套工具**：让 agent / 脚本在下载前针对下载链接自动选择延迟最低的节点，再走代理下载。Node 零依赖，一行命令安装：
+[Clash Pick](https://github.com/likangdi-code/clash-pick) 是本仓库「网址代理」功能的 **CLI 配套工具**——让 agent / 脚本在下载前针对下载链接自动选择延迟最低的节点，再走代理下载。两者**共用同一份网址代理组与规则**，互补使用：
 
-```powershell
-irm https://raw.githubusercontent.com/likangdi-code/clash-pick/main/install.ps1 | iex
-```
+| | 本仓库（GUI） | Clash Pick（CLI） |
+|---|---|---|
+| 角色 | 可视化管理「网址代理」 | 自动化测速选节点 |
+| 建组 | 界面手动新建 `URL-Proxy-*` 组 | `add` 全自动建组（走命令桥） |
+| 选节点 | 手动点击 / ⚡ 测速 / AUTO | `pick` 自动切最低延迟 |
+| 适用 | 日常手动使用 | agent / 脚本 / 下载自动化 |
 
-使用示例：
+**联合工作流（AI agent 下载场景）**：
 
 ```bash
-clash-pick pick "https://example.com/big-file.zip"     # 自动选最低延迟节点
-curl --proxy http://127.0.0.1:7897 -L -O "https://example.com/big-file.zip"
+# 1. 全自动：为下载链接建组 + 选最优节点（本软件在跑即可）
+clash-pick add "https://example.com/big-file.zip"
+
+# 2. 走 mihomo 混入端口下载（命中网址代理规则 → 走刚选中的节点）
+curl --proxy http://127.0.0.1:7897 -L -o big-file.zip "https://example.com/big-file.zip"
 ```
+
+- **共用同一份组/规则**：GUI 建的组，CLI 能 `pick`；CLI `add` 建的组，回到本软件「网址代理」页即可看到并手动调整。
+- **互补**：GUI 适合可视化巡检和手动微调，CLI 适合把「下载前选最优节点」自动化（尤其 agent 自主执行）。
+- **安装 Clash Pick**：Windows `irm https://raw.githubusercontent.com/likangdi-code/clash-pick/main/install.ps1 | iex`；macOS / Linux `curl -fsSL https://raw.githubusercontent.com/likangdi-code/clash-pick/main/install.sh | sh`
+
+> ⚠️ Clash Pick 的 `add` 依赖本软件的**命令桥**（`/commands/profile-save`），需要**含命令桥的构建**（本次发布的安装包已含此能力）；旧版仍可用 `pick` 对已建组测速切换。
 
 ## 下载
 
@@ -86,6 +98,8 @@ curl --proxy http://127.0.0.1:7897 -L -O "https://example.com/big-file.zip"
 ## 特性
 
 - 基于 Rust + Tauri 2，内置 [mihomo](https://github.com/MetaCubeX/mihomo) 内核，支持切换 Alpha 版本内核
+- **网址代理**：为任意网址单独指定节点，支持 TOR（.onion）
+- **命令桥**：本地 HTTP 接口（`/commands/profile-save` 等），供外部 CLI 自动化建组
 - 简洁美观的界面，支持自定义主题、代理组/托盘图标与 CSS Injection
 - 配置文件管理与增强（Merge / Script），语法提示
 - 系统代理与守卫、TUN（虚拟网卡）模式
