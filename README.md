@@ -12,7 +12,7 @@
 
 Clash Verge 是一款基于 **Rust + Tauri 2** 的 [Clash Meta (mihomo)](https://github.com/MetaCubeX/mihomo) 图形化客户端，简洁高效，支持系统代理、TUN 虚拟网卡、配置文件增强（Merge / Script）等功能。
 
-> 本项目是官方 [clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev) 的定制分支，官方版本的原有功能与本版完全一致，本版额外提供 **「网址代理」** 功能，并内置一条**命令桥**，让外部 CLI（如 [Clash Pick](https://github.com/likangdi-code/clash-pick)）也能自动化建组。
+> 本项目是官方 [clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev) 的定制分支，官方版本的原有功能与本版完全一致，本版额外提供 **「网址代理」** 功能，并内置一条**命令桥**，让外部 CLI（如 [Clash Pick](https://github.com/likangdi-code/clash-pick-cli)）也能自动化建组。
 
 ## Preview
 
@@ -39,7 +39,7 @@ Clash Verge 是一款基于 **Rust + Tauri 2** 的 [Clash Meta (mihomo)](https:/
 
 ## 与 Clash Pick CLI 联合使用
 
-[Clash Pick](https://github.com/likangdi-code/clash-pick) 是本仓库「网址代理」功能的 **CLI 配套工具**——让 agent / 脚本在下载前针对下载链接自动选择延迟最低的节点，再走代理下载。两者**共用同一份网址代理组与规则**，互补使用：
+[Clash Pick](https://github.com/likangdi-code/clash-pick-cli) 是本仓库「网址代理」功能的 **CLI 配套工具**——让 agent / 脚本在下载前针对下载链接自动选择延迟最低的节点，再走代理下载。两者**共用同一份网址代理组与规则**，互补使用：
 
 | | 本仓库（GUI） | Clash Pick（CLI） |
 |---|---|---|
@@ -60,7 +60,7 @@ curl --proxy http://127.0.0.1:7897 -L -o big-file.zip "https://example.com/big-f
 
 - **共用同一份组/规则**：GUI 建的组，CLI 能 `pick`；CLI `add` 建的组，回到本软件「网址代理」页即可看到并手动调整。
 - **互补**：GUI 适合可视化巡检和手动微调，CLI 适合把「下载前选最优节点」自动化（尤其 agent 自主执行）。
-- **安装 Clash Pick**：Windows `irm https://raw.githubusercontent.com/likangdi-code/clash-pick/main/install.ps1 | iex`；macOS / Linux `curl -fsSL https://raw.githubusercontent.com/likangdi-code/clash-pick/main/install.sh | sh`
+- **安装 Clash Pick**：Windows `irm https://raw.githubusercontent.com/likangdi-code/clash-pick-cli/main/install.ps1 | iex`；macOS / Linux `curl -fsSL https://raw.githubusercontent.com/likangdi-code/clash-pick-cli/main/install.sh | sh`
 
 > ⚠️ Clash Pick 的 `add` 依赖本软件的**命令桥**（`/commands/profile-save`），需要**含命令桥的构建**（本次发布的安装包已含此能力）；旧版仍可用 `pick` 对已建组测速切换。
 
