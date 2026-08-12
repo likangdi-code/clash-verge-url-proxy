@@ -69,13 +69,19 @@ curl --proxy http://127.0.0.1:7897 -L -O "https://example.com/big-file.zip"
 > 内置 WebView2 版体积较大（约 200MB），仅在系统无法安装 WebView2 或企业环境使用。
 > Linux 目前仅提供 amd64（x64）安装包。
 
-> ⚠️ **macOS 安装**：本版本未签名、未公证（无 Apple 开发者证书）。首次打开可能提示「无法验证开发者」或「已损坏，无法打开」——这是 Gatekeeper 拦截，**文件并未损坏**。请执行：
+> ⚠️ **macOS 安装**：本版本未签名、未公证（无 Apple 开发者证书），首次打开会被 Gatekeeper 拦截（提示「已损坏，无法打开」——这是拦截，**文件并未损坏**）。**推荐一键安装**：
+>
+> 1. 下载 [Install.command](./Install.command)（或从 Release 页面下载）
+> 2. 双击运行（若被拦截，右键 → 打开 → 仍要打开）
+> 3. 脚本自动完成「复制到应用程序 → 清除隔离 → 重新签名 → 启动」
+>
+> 手动方式（终端执行，需先把 `Clash Verge.app` 拖入「应用程序」）：
 >
 > ```bash
-> xattr -dr com.apple.quarantine "/Applications/Clash Verge.app"
+> sudo xattr -cr "/Applications/Clash Verge.app"
+> sudo codesign --force --deep --sign - "/Applications/Clash Verge.app"
+> open "/Applications/Clash Verge.app"
 > ```
->
-> 然后正常打开；或右键点击应用 → 打开 → 仍要打开。
 
 ## 特性
 
