@@ -1,0 +1,261 @@
+name: Release Build (All Platforms)
+
+# 手动触发（Actions 页 → Run workflow），或打 tag v*.*.* 自动触发。
+# 产物对标 clash-verge-rev 官网 release：
+#   Windows x64/arm64 setup.exe + fixed_webview2 版
+#   macOS aarch64/x64 dmg
+#   Linux amd64/arm64/armhf deb + rpm
+# 说明：无 Apple 证书，macOS 包不签名；无 TAURI 私钥，不生成 updater 签名。
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  HUSKY: 0
+
+jobs:
+  build-windows:
+    name: Windows ${{ matrix.target }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+          - target: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v1-rust'
+          key: 'win-${{ matrix.target }}'
+          workspaces: '. -> target'
+          cache-all-crates: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.18.0'
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Install dependencies
+        run: pnpm i
+      - name: Prebuild
+        run: pnpm run prebuild ${{ matrix.target }}
+      - name: Tauri build
+        run: pnpm tauri build --target ${{ matrix.target }}
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/bundle/nsis/*setup*
+
+  build-windows-fixed-webview2:
+    name: Windows Fixed WebView2 ${{ matrix.arch }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            arch: x64
+          - target: aarch64-pc-windows-msvc
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v1-rust'
+          key: 'win-fwv-${{ matrix.target }}'
+          workspaces: '. -> target'
+          cache-all-crates: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.18.0'
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Install dependencies
+        run: pnpm i
+      - name: Prebuild
+        run: pnpm run prebuild ${{ matrix.target }}
+      - name: Download WebView2 Runtime
+        run: |
+          invoke-webrequest -uri https://github.com/westinyang/WebView2RuntimeArchive/releases/download/133.0.3065.92/Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.${{ matrix.arch }}.cab -outfile Microsoft.WebView2.FixedVersionRuntime.cab
+          Expand .\Microsoft.WebView2.FixedVersionRuntime.cab -F:* ./src-tauri
+          Remove-Item .\src-tauri\tauri.windows.conf.json
+          Rename-Item .\src-tauri\webview2.${{ matrix.arch }}.json tauri.windows.conf.json
+      - name: Tauri build
+        run: pnpm tauri build --target ${{ matrix.target }}
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+      - name: Rename fixed_webview2
+        run: |
+          Get-ChildItem ".\target\${{ matrix.target }}\release\bundle\nsis\*-setup.exe" | ForEach-Object {
+            Rename-Item $_.FullName ($_.Name -replace "-setup\.exe$", "_fixed_webview2-setup.exe")
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-fixed-webview2-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/release/bundle/nsis/*setup*
+
+  build-macos:
+    name: macOS ${{ matrix.target }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+          - target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v1-rust'
+          key: 'macos-${{ matrix.target }}'
+          workspaces: '. -> target'
+          cache-all-crates: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.18.0'
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Install dependencies
+        run: pnpm i
+      - name: Prebuild
+        run: pnpm run prebuild ${{ matrix.target }}
+      - name: Tauri build (unsigned)
+        run: pnpm tauri build --target ${{ matrix.target }}
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            target/${{ matrix.target }}/release/bundle/macos/*.app
+
+  build-linux-amd64:
+    name: Linux amd64
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: x86_64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v1-rust'
+          key: 'linux-amd64'
+          workspaces: '. -> target'
+          cache-all-crates: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.18.0'
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxslt1.1 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Install dependencies
+        run: pnpm i
+      - name: Prebuild
+        run: pnpm run prebuild x86_64-unknown-linux-gnu
+      - name: Tauri build
+        run: pnpm build --target x86_64-unknown-linux-gnu
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-amd64
+          path: |
+            target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
+
+  build-linux-arm:
+    name: Linux ${{ matrix.target }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-gnu
+            dpkg_arch: arm64
+            triplet: aarch64-linux-gnu
+            compiler: gcc-aarch64-linux-gnu
+          - target: armv7-unknown-linux-gnueabihf
+            dpkg_arch: armhf
+            triplet: arm-linux-gnueabihf
+            compiler: gcc-arm-linux-gnueabihf
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v1-rust'
+          key: 'linux-${{ matrix.target }}'
+          workspaces: '. -> target'
+          cache-all-crates: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.18.0'
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Setup cross toolchain
+        run: |
+          sudo dpkg --add-architecture ${{ matrix.dpkg_arch }}
+          sudo apt update
+          sudo apt install -y \
+            libwebkit2gtk-4.1-dev:${{ matrix.dpkg_arch }} \
+            libayatana-appindicator3-dev:${{ matrix.dpkg_arch }} \
+            libssl-dev:${{ matrix.dpkg_arch }} \
+            patchelf:${{ matrix.dpkg_arch }} \
+            librsvg2-dev:${{ matrix.dpkg_arch }} \
+            libxslt1.1:${{ matrix.dpkg_arch }} \
+            ${{ matrix.compiler }}
+      - name: Install dependencies
+        run: pnpm i
+      - name: Prebuild
+        run: pnpm run prebuild ${{ matrix.target }}
+      - name: Tauri build (cross)
+        run: |
+          export PKG_CONFIG_ALLOW_CROSS=1
+          export PKG_CONFIG_PATH=/usr/lib/${{ matrix.triplet }}/pkgconfig/
+          export PKG_CONFIG_SYSROOT_DIR=/usr/${{ matrix.triplet }}/
+          pnpm build --target ${{ matrix.target }}
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.dpkg_arch }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/deb/*.deb
+            target/${{ matrix.target }}/release/bundle/rpm/*.rpm
