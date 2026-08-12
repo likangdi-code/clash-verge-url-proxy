@@ -1,10 +1,9 @@
-name: Release Build (All Platforms)
+name: Release Build (Win + macOS)
 
 # 手动触发（Actions 页 → Run workflow），或打 tag v*.*.* 自动触发。
-# 产物对标 clash-verge-rev 官网 release：
+# 产物：
 #   Windows x64/arm64 setup.exe + fixed_webview2 版
 #   macOS aarch64/x64 dmg
-#   Linux amd64/arm64/armhf deb + rpm
 # 说明：无 Apple 证书，macOS 包不签名；无 TAURI 私钥，不生成 updater 签名。
 on:
   workflow_dispatch:
@@ -155,121 +154,3 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             target/${{ matrix.target }}/release/bundle/macos/*.app
-
-  build-linux-amd64:
-    name: Linux amd64
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.95.0'
-          targets: x86_64-unknown-linux-gnu
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: 'v1-rust'
-          key: 'linux-amd64'
-          workspaces: '. -> target'
-          cache-all-crates: true
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24.18.0'
-      - uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxslt1.1 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-      - name: Install dependencies
-        run: pnpm i
-      - name: Prebuild
-        run: pnpm run prebuild x86_64-unknown-linux-gnu
-      - name: Tauri build
-        run: pnpm build --target x86_64-unknown-linux-gnu
-        env:
-          NODE_OPTIONS: '--max_old_space_size=4096'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-amd64
-          path: |
-            target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
-            target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
-
-  build-linux-arm:
-    name: Linux ${{ matrix.target }}
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: aarch64-unknown-linux-gnu
-            dpkg_arch: arm64
-            triplet: aarch64-linux-gnu
-            compiler: gcc-aarch64-linux-gnu
-          - target: armv7-unknown-linux-gnueabihf
-            dpkg_arch: armhf
-            triplet: arm-linux-gnueabihf
-            compiler: gcc-arm-linux-gnueabihf
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: '1.95.0'
-          targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: 'v1-rust'
-          key: 'linux-${{ matrix.target }}'
-          workspaces: '. -> target'
-          cache-all-crates: true
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24.18.0'
-      - uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-      - name: Setup cross toolchain
-        run: |
-          # GitHub runner 默认 apt 源只含 amd64；arm64/armhf 需 ports.ubuntu.com，
-          # 故重写 sources.list（与上游 release.yml 一致），否则 apt install 404。
-          cat > /tmp/sources.list << EOF
-          deb [arch=amd64,i386] http://archive.ubuntu.com/ubuntu jammy main multiverse universe restricted
-          deb [arch=amd64,i386] http://archive.ubuntu.com/ubuntu jammy-security main multiverse universe restricted
-          deb [arch=amd64,i386] http://archive.ubuntu.com/ubuntu jammy-updates main multiverse universe restricted
-          deb [arch=amd64,i386] http://archive.ubuntu.com/ubuntu jammy-backports main multiverse universe restricted
-          deb [arch=armhf,arm64] http://ports.ubuntu.com/ubuntu-ports jammy main multiverse universe restricted
-          deb [arch=armhf,arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main multiverse universe restricted
-          deb [arch=armhf,arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main multiverse universe restricted
-          deb [arch=armhf,arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main multiverse universe restricted
-          EOF
-          sudo mv /etc/apt/sources.list /etc/apt/sources.list.default
-          sudo mv /tmp/sources.list /etc/apt/sources.list
-          sudo dpkg --add-architecture ${{ matrix.dpkg_arch }}
-          sudo apt update
-          sudo apt install -y \
-            libwebkit2gtk-4.1-dev:${{ matrix.dpkg_arch }} \
-            libayatana-appindicator3-dev:${{ matrix.dpkg_arch }} \
-            libssl-dev:${{ matrix.dpkg_arch }} \
-            patchelf:${{ matrix.dpkg_arch }} \
-            librsvg2-dev:${{ matrix.dpkg_arch }} \
-            libxslt1.1:${{ matrix.dpkg_arch }} \
-            ${{ matrix.compiler }}
-      - name: Install dependencies
-        run: pnpm i
-      - name: Prebuild
-        run: pnpm run prebuild ${{ matrix.target }}
-      - name: Tauri build (cross)
-        run: |
-          export PKG_CONFIG_ALLOW_CROSS=1
-          export PKG_CONFIG_PATH=/usr/lib/${{ matrix.triplet }}/pkgconfig/
-          export PKG_CONFIG_SYSROOT_DIR=/usr/${{ matrix.triplet }}/
-          pnpm build --target ${{ matrix.target }}
-        env:
-          NODE_OPTIONS: '--max_old_space_size=4096'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-${{ matrix.dpkg_arch }}
-          path: |
-            target/${{ matrix.target }}/release/bundle/deb/*.deb
-            target/${{ matrix.target }}/release/bundle/rpm/*.rpm
