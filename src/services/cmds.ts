@@ -5,6 +5,9 @@ import { getProxies, getProxyProviders } from 'tauri-plugin-mihomo-api'
 import { showNotice } from '@/services/notice-service'
 import { debugLog } from '@/utils/debug'
 
+/** 「网址代理」功能生成的代理组前缀，用于与「代理」菜单隔离 */
+const URL_PROXY_PREFIX = 'URL-Proxy-'
+
 export async function copyClashEnv() {
   return invoke<void>('copy_clash_env')
 }
@@ -207,6 +210,9 @@ export async function calcuProxies(): Promise<{
       .concat(globalGroups)
   }
 
+  // 隔离「网址代理」菜单：URL-Proxy 代理组不出现在「代理」页面（含导航栏）
+  groups = groups.filter((group) => !group.name.startsWith(URL_PROXY_PREFIX))
+
   const proxies = [direct, reject].concat(
     Object.values(proxyRecord).filter(
       (p) => !p?.all?.length && p?.name !== 'DIRECT' && p?.name !== 'REJECT',
@@ -215,7 +221,10 @@ export async function calcuProxies(): Promise<{
 
   const _global = {
     ...global,
-    all: global?.all?.map((item) => generateItem(item)) || [],
+    all:
+      global?.all
+        ?.filter((item) => !item.startsWith(URL_PROXY_PREFIX))
+        .map((item) => generateItem(item)) || [],
   }
 
   // 原本的 records 拥有所有节点信息，新版本内核需要将 provider 的节点信息合并到 records 中, 同时兼容旧版本数据

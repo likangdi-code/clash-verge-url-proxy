@@ -49,6 +49,8 @@ function saveEntries(entries: UrlProxyEntry[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export function getAllEntries(): UrlProxyEntry[] {
@@ -57,6 +59,63 @@ export function getAllEntries(): UrlProxyEntry[] {
 
 export function getEntry(id: string): UrlProxyEntry | undefined {
   return loadEntries().find((e) => e.id === id)
+}
+
+/** 从当前 profile 增强文件恢复 URL-Proxy 条目（localStorage 缺失时补全）
+ *
+ * 背景：网址代理条目存 localStorage，但增强文件才是 mihomo 真实生效的
+ * 事实来源。当 localStorage 丢失 / 跨环境（dev↔release 的 WebView 数据不
+ * 共享）时，「网址代理」菜单会显示为空，而 mihomo 里的 URL-Proxy 组与
+ * 规则仍然存在（「代理」菜单可见）。此函数读取增强文件，把"有组又有规则"
+ * 的 URL-Proxy 反推为条目合并回 localStorage，实现跨环境持久化恢复。
+ *
+ * 幂等：localStorage 已有的条目（含 selectedProxy/autoSelect 元数据）保留。
+ */
+export async function restoreEntriesFromEnhance(): Promise<void> {
+  const uids = await getCurrentEnhancementUids()
+  if (!uids?.groups || !uids?.rules) return
+
+  try {
+    const groupsRaw = (await readProfileFile(uids.groups)) as string
+    const groupsObj = (yaml.load(groupsRaw) as any) || {}
+    const groupNames = new Set(
+      (Array.isArray(groupsObj.append) ? groupsObj.append : [])
+        .filter((g: any) => isUrlProxyName(g?.name ?? ''))
+        .map((g: any) => g.name),
+    )
+    if (groupNames.size === 0) return
+
+    const rulesRaw = (await readProfileFile(uids.rules)) as string
+    const rulesObj = (yaml.load(rulesRaw) as any) || {}
+    const append = Array.isArray(rulesObj.append) ? rulesObj.append : []
+
+    const existing = loadEntries()
+    const existingById = new Map(existing.map((e) => [e.id, e]))
+
+    const restored: UrlProxyEntry[] = []
+    for (const rule of append) {
+      if (typeof rule !== 'string' || !rule.includes('URL-Proxy-')) continue
+      const parts = rule.split(',')
+      if (parts.length !== 3) continue
+      const [, host, group] = parts
+      if (!groupNames.has(group)) continue // 只恢复"有组"的规则
+      const id = group.slice('URL-Proxy-'.length)
+      if (existingById.has(id)) continue // 已有条目保留原元数据
+      restored.push({
+        id,
+        host,
+        url: host.endsWith('.onion') ? `http://${host}` : `https://${host}`,
+        selectedProxy: null,
+        autoSelectedProxy: null,
+        createdAt: 0,
+      })
+    }
+
+    if (restored.length === 0) return
+    saveEntries([...existing, ...restored])
+  } catch (e) {
+    console.error('[URLProxy] 从增强文件恢复条目失败:', e)
+  }
 }
 
 export function addEntry(url: string): UrlProxyEntry | null {
@@ -91,7 +150,8 @@ export function addEntry(url: string): UrlProxyEntry | null {
     autoSelectedProxy: null,
     createdAt: Date.now(),
   }
-  saveEntries([...entries, entry])
+  // 最新新建的网址栏显示在最上面（prepend 而非 append）
+  saveEntries([entry, ...entries])
   return entry
 }
 
@@ -119,18 +179,43 @@ export function getGroupName(entry: UrlProxyEntry): string {
   return `URL-Proxy-${entry.id}`
 }
 
-/** 获取所有可用代理名称列表 */
-export async function fetchAllProxyNames(): Promise<string[]> {
-  try {
-    const data = await getProxies()
-    if (!data?.proxies) return []
-    return Object.keys(data.proxies).filter(
-      (name) => name !== 'GLOBAL' && name !== 'DIRECT' && name !== 'REJECT',
-    )
-  } catch (e) {
-    console.error('[URLProxy] 获取代理列表失败:', e)
-    return []
+/** 是否为「网址代理」生成的代理组（用于隔离两个菜单） */
+export const isUrlProxyName = (name: string) => name.startsWith('URL-Proxy-')
+
+/** 获取所有可用代理名称列表
+ *
+ * 排除 GLOBAL/DIRECT/REJECT 与 URL-Proxy 组自身：
+ * 避免 URL-Proxy 组互相引用导致增强文件无限膨胀（mihomo 校验变慢/失败）。
+ *
+ * 自愈：mihomo 在 reload 窗口 / 刚启动时 `getProxies` 可能瞬时不响应或返回空，
+ * 此时直接失败会导致「新建网址代理失败」的偶发问题。故对失败/空做有限重试。
+ */
+export async function fetchAllProxyNames(
+  attempts: number = 3,
+): Promise<string[]> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const data = await getProxies()
+      const names = data?.proxies
+        ? Object.keys(data.proxies).filter(
+            (name) =>
+              name !== 'GLOBAL' &&
+              name !== 'DIRECT' &&
+              name !== 'REJECT' &&
+              !isUrlProxyName(name),
+          )
+        : []
+      if (names.length > 0) return names
+      if (i < attempts - 1) {
+        console.warn(`[URLProxy] 代理列表为空，${300}ms 后重试`)
+        await sleep(300)
+      }
+    } catch (e) {
+      console.error(`[URLProxy] 获取代理列表失败(第${i + 1}/${attempts}次):`, e)
+      if (i < attempts - 1) await sleep(300)
+    }
   }
+  return []
 }
 
 /** 取当前 current profile 的 groups/rules 增强条目 uid
@@ -161,6 +246,154 @@ async function getCurrentEnhancementUids(): Promise<{
   }
 }
 
+/** 从增强文件提取已有 URL-Proxy 组的历史节点列表（兜底用）
+ *
+ * 当 mihomo `getProxies` 瞬时不响应时，用上次成功写入的节点列表重建组，
+ * 避免「新建网址代理失败」的偶发问题。语义与 `fetchAllProxyNames` 对齐：
+ * 排除 GLOBAL/DIRECT/REJECT 与 URL-Proxy 组自身。
+ */
+async function loadProxyNamesFromEnhance(): Promise<string[]> {
+  try {
+    const uids = await getCurrentEnhancementUids()
+    if (!uids?.groups) return []
+    const raw = (await readProfileFile(uids.groups)) as string
+    const obj = (yaml.load(raw) as any) || {}
+    const append = Array.isArray(obj.append) ? obj.append : []
+    const names = new Set<string>()
+    for (const g of append) {
+      if (!isUrlProxyName(g?.name ?? '') || !Array.isArray(g.proxies)) continue
+      for (const n of g.proxies) {
+        if (
+          typeof n === 'string' &&
+          n !== 'GLOBAL' &&
+          n !== 'DIRECT' &&
+          n !== 'REJECT' &&
+          !isUrlProxyName(n)
+        ) {
+          names.add(n)
+        }
+      }
+    }
+    return [...names]
+  } catch (e) {
+    console.error('[URLProxy] 从增强文件提取节点失败:', e)
+    return []
+  }
+}
+
+/** 同步 Groups 增强文件：以 localStorage 的 entries 为唯一来源重建 URL-Proxy 组
+ *
+ * - 有可用节点时：重建全部 URL-Proxy 组（代理列表保持干净、不互相引用）
+ * - 无可用节点时：仅移除不再需要的孤儿组，保留已有组结构
+ * - 保存失败（校验不过）时 Rust 侧会回滚文件并返回 false
+ *
+ * 防误删：URL-Proxy 组只有「被 rules 引用」或「仍存在于 entries」时才保留。
+ * 原因：若 localStorage 与增强文件不同步（跨环境、restore 不完整），
+ * 以 entries 为唯一来源全量重建会误删 mihomo 里真实生效的组 → 网址消失。
+ * 规则引用（rules）才是真实生效来源，故保留「仍有规则引用」的组。
+ */
+async function syncGroupsFile(
+  groupsUid: string,
+  rulesUid: string,
+  entries: UrlProxyEntry[],
+  allProxies: string[],
+): Promise<boolean> {
+  try {
+    const raw = (await readProfileFile(groupsUid)) as string
+    const obj = (yaml.load(raw) as any) || {}
+    const existing = Array.isArray(obj.append) ? obj.append : []
+    const entryNames = new Set(entries.map(getGroupName))
+
+    // 读 rules 增强，找出仍被引用的 URL-Proxy 组（防不同步误删的关键依据）
+    const referencedGroups = new Set<string>()
+    try {
+      const rulesRaw = (await readProfileFile(rulesUid)) as string
+      const rulesObj = (yaml.load(rulesRaw) as any) || {}
+      const rulesAppend = Array.isArray(rulesObj.append)
+        ? rulesObj.append
+        : []
+      for (const rule of rulesAppend) {
+        if (typeof rule !== 'string' || !rule.includes('URL-Proxy-')) continue
+        const parts = rule.split(',')
+        if (parts.length === 3) referencedGroups.add(parts[2])
+      }
+    } catch (e) {
+      console.error('[URLProxy] 读取规则增强失败(孤儿组判断降级):', e)
+    }
+
+    let append: any[]
+    if (allProxies.length > 0) {
+      const kept = existing.filter((g: any) => !isUrlProxyName(g?.name ?? ''))
+      // 保留既有的 URL-Proxy 组：仍被规则引用 或 仍存在于 entries（防误删）
+      const keptUrl = existing.filter(
+        (g: any) =>
+          isUrlProxyName(g?.name ?? '') &&
+          (referencedGroups.has(g.name) || entryNames.has(g.name)),
+      )
+      const groups = entries.map((e) => ({
+        name: getGroupName(e),
+        type: 'select',
+        proxies: ['DIRECT', 'REJECT', ...allProxies],
+      }))
+      // 合并去重（既有组优先，避免同 id 的 entries 组覆盖已有 proxies）
+      const byName = new Map<string, any>()
+      for (const g of [...kept, ...keptUrl, ...groups]) byName.set(g.name, g)
+      append = [...byName.values()]
+    } else {
+      append = existing.filter(
+        (g: any) =>
+          !isUrlProxyName(g?.name ?? '') ||
+          referencedGroups.has(g.name) ||
+          entryNames.has(g.name),
+      )
+    }
+
+    return await saveProfileFile(
+      groupsUid,
+      yaml.dump(
+        { prepend: obj.prepend ?? [], append, delete: obj.delete ?? [] },
+        { forceQuotes: true },
+      ),
+    )
+  } catch (e) {
+    console.error('[URLProxy] 写入代理组增强失败:', e)
+    return false
+  }
+}
+
+/** 同步 Rules 增强文件：URL-Proxy 规则子集始终等于 entries 对应的规则
+ * （自动移除已删除条目的规则、清理历史孤儿规则）
+ */
+async function syncRulesFile(
+  rulesUid: string,
+  entries: UrlProxyEntry[],
+): Promise<boolean> {
+  try {
+    const raw = (await readProfileFile(rulesUid)) as string
+    const obj = (yaml.load(raw) as any) || {}
+    const existing = Array.isArray(obj.append) ? obj.append : []
+    const kept = existing.filter(
+      (r: any) => typeof r !== 'string' || !r.includes('URL-Proxy-'),
+    )
+    const rules = entries.map((e) => `DOMAIN-SUFFIX,${e.host},${getGroupName(e)}`)
+
+    return await saveProfileFile(
+      rulesUid,
+      yaml.dump(
+        {
+          prepend: obj.prepend ?? [],
+          append: [...kept, ...rules],
+          delete: obj.delete ?? [],
+        },
+        { forceQuotes: true },
+      ),
+    )
+  } catch (e) {
+    console.error('[URLProxy] 写入规则增强失败:', e)
+    return false
+  }
+}
+
 /** 把 mihomo 真实生效的代理组/规则写进当前 profile 的增强文件，并触发 enhance
  *
  * 关键：mihomo 的 `PATCH /configs` 只接受 General 字段，对 `proxy-groups` /
@@ -169,11 +402,16 @@ async function getCurrentEnhancementUids(): Promise<{
  * `enhanceProfiles()` —— 它会用完整配置 reload mihomo，组才真实存在，
  * 之后 `selectNodeForGroup` 才能工作。
  *
- * 幂等：同名 group / 同一条 rule 只追加一次。
+ * 自愈：以 localStorage 全量 entries 重建两组文件，每次操作顺带清理
+ * 历史孤儿组/孤儿规则，增强文件不会因反复增删而膨胀（解决"新建多了报错"）。
  */
 export async function createUrlProxyGroup(entry: UrlProxyEntry): Promise<boolean> {
-  const groupName = getGroupName(entry)
-  const allProxies = await fetchAllProxyNames()
+  let allProxies = await fetchAllProxyNames()
+
+  if (allProxies.length === 0) {
+    // 兜底：mihomo 瞬时不响应时，用增强文件里上次成功写入的节点重建组
+    allProxies = await loadProxyNamesFromEnhance()
+  }
 
   if (allProxies.length === 0) {
     console.error('[URLProxy] 没有可用代理节点')
@@ -186,124 +424,70 @@ export async function createUrlProxyGroup(entry: UrlProxyEntry): Promise<boolean
     return false
   }
 
-  const newRule = `DOMAIN-SUFFIX,${entry.host},${groupName}`
+  // 新增条目已由 addEntry 写入 localStorage，entries 为全量（含新增）
+  const entries = getAllEntries()
 
-  // 1) 写 Groups 增强：append 一个 selector 组（含 DIRECT/REJECT 与全部节点）
-  try {
-    const raw = (await readProfileFile(uids.groups)) as string
-    const obj = (yaml.load(raw) as any) || {}
-    const append: any[] = Array.isArray(obj.append) ? obj.append : []
-    if (!append.some((g: any) => g?.name === groupName)) {
-      append.push({
-        name: groupName,
-        type: 'select',
-        proxies: ['DIRECT', 'REJECT', ...allProxies],
-      })
-    }
-    const dumped = yaml.dump(
-      {
-        prepend: obj.prepend ?? [],
-        append,
-        delete: obj.delete ?? [],
-      },
-      { forceQuotes: true },
-    )
-    await saveProfileFile(uids.groups, dumped)
-  } catch (e) {
-    console.error('[URLProxy] 写入代理组增强失败:', e)
+  // 先写组（新组暂无规则引用 → 校验通过），再写规则（新规则引用已存在的组 → 校验通过）
+  if (!(await syncGroupsFile(uids.groups, uids.rules, entries, allProxies)))
     return false
-  }
+  if (!(await syncRulesFile(uids.rules, entries))) return false
 
-  // 2) 写 Rules 增强：append 一条 DOMAIN-SUFFIX 规则指向该组
-  try {
-    const raw = (await readProfileFile(uids.rules)) as string
-    const obj = (yaml.load(raw) as any) || {}
-    const append: string[] = Array.isArray(obj.append) ? obj.append : []
-    if (!append.includes(newRule)) append.push(newRule)
-    const dumped = yaml.dump(
-      {
-        prepend: obj.prepend ?? [],
-        append,
-        delete: obj.delete ?? [],
-      },
-      { forceQuotes: true },
-    )
-    await saveProfileFile(uids.rules, dumped)
-  } catch (e) {
-    console.error('[URLProxy] 写入规则增强失败:', e)
-    return false
-  }
-
-  // 3) 重新生成完整配置并 reload mihomo（组/规则此刻才真实存在）
+  // 重新生成完整配置并 reload mihomo（组/规则此刻才真实存在）
   // silent=true：校验失败不弹通知（URL 代理组操作不应打扰用户）
   try {
-    await enhanceProfiles(true)
-    debugLog(`[URLProxy] 代理组创建/更新成功: ${groupName}`)
+    if (!(await enhanceProfiles(true))) {
+      console.error('[URLProxy] 增强配置校验失败:', getGroupName(entry))
+      return false
+    }
   } catch (e) {
     console.error('[URLProxy] 增强配置失败:', e)
     return false
   }
 
-  // 4) 如果用户之前有选中的代理，恢复选中
+  // 如果用户之前有选中的代理，恢复选中
   const targetProxy = entry.selectedProxy ?? entry.autoSelectedProxy
   if (targetProxy && allProxies.includes(targetProxy)) {
     try {
-      await selectNodeForGroup(groupName, targetProxy)
+      await selectNodeForGroup(getGroupName(entry), targetProxy)
     } catch (e) {
       console.error('[URLProxy] 恢复选中代理失败:', e)
     }
   }
 
+  debugLog(`[URLProxy] 代理组创建/更新成功: ${getGroupName(entry)}`)
   return true
 }
 
 /** 从当前 profile 的增强文件中删除 URL 代理组和规则，并触发 enhance
  *
- * 与 createUrlProxyGroup 对称：从 Groups/Rules 增强文件的 `append` 中过滤掉
- * 对应项后写回，再 enhanceProfiles() 重建配置。
+ * 关键顺序：**先删规则、再删组**。
+ * `save_profile_file` 每次写入都会重建并校验完整配置，若先删组，规则仍引用
+ * 已删除的组 → mihomo 校验失败 → 弹出「订阅配置校验失败」并回滚文件。
+ * 先删规则后组：删除瞬间组成为"孤儿组"（合法），删除组时已无规则悬空 → 校验通过。
+ *
+ * 同时按 localStorage 全量 entries 重建，顺带清理历史孤儿组/规则。
  */
-export async function removeUrlProxyGroup(entry: UrlProxyEntry): Promise<void> {
-  const groupName = getGroupName(entry)
-  const newRule = `DOMAIN-SUFFIX,${entry.host},${groupName}`
-
+export async function removeUrlProxyGroup(entry: UrlProxyEntry): Promise<boolean> {
   const uids = await getCurrentEnhancementUids()
   if (!uids?.groups || !uids?.rules) {
     console.warn('[URLProxy] 当前订阅未启用增强，无需清理分组')
-    return
+    return false
   }
 
-  try {
-    const raw = (await readProfileFile(uids.groups)) as string
-    const obj = (yaml.load(raw) as any) || {}
-    const append = (Array.isArray(obj.append) ? obj.append : []).filter(
-      (g: any) => g?.name !== groupName,
-    )
-    await saveProfileFile(
-      uids.groups,
-      yaml.dump(
-        { prepend: obj.prepend ?? [], append, delete: obj.delete ?? [] },
-        { forceQuotes: true },
-      ),
-    )
-  } catch (e) {
-    console.error('[URLProxy] 删除代理组增强失败:', e)
+  // 条目已由页面从 localStorage 移除
+  const entries = getAllEntries()
+
+  // 先删规则（组暂时无人引用 → 校验通过）
+  if (!(await syncRulesFile(uids.rules, entries))) {
+    console.warn('[URLProxy] 删除规则失败，中止删除代理组（避免规则悬空）')
+    return false
   }
 
-  try {
-    const raw = (await readProfileFile(uids.rules)) as string
-    const obj = (yaml.load(raw) as any) || {}
-    const append = (Array.isArray(obj.append) ? obj.append : []).filter(
-      (r: any) => r !== newRule,
-    )
-    await saveProfileFile(
-      uids.rules,
-      yaml.dump(
-        { prepend: obj.prepend ?? [], append, delete: obj.delete ?? [] },
-        { forceQuotes: true },
-      ),
-    )
-  } catch (e) {
-    console.error('[URLProxy] 删除规则增强失败:', e)
+  // 再删组（此时已无规则引用它 → 校验通过）
+  const allProxies = await fetchAllProxyNames()
+  if (!(await syncGroupsFile(uids.groups, uids.rules, entries, allProxies))) {
+    console.warn('[URLProxy] 删除代理组失败')
+    return false
   }
 
   try {
@@ -311,6 +495,7 @@ export async function removeUrlProxyGroup(entry: UrlProxyEntry): Promise<void> {
   } catch (e) {
     console.error('[URLProxy] 增强配置失败:', e)
   }
+  return true
 }
 
 /** 为 URL 选择指定代理节点（与"代理"菜单同源：selectNodeForGroup）

@@ -22,7 +22,7 @@ const HEAD_STATE_KEY = 'proxy-head-state'
 export const DEFAULT_STATE: HeadState = {
   open: false,
   showType: true,
-  sortType: 0,
+  sortType: 1, // 首选排序方式：按延迟（0=默认顺序 1=延迟 2=字母）
   filterText: '',
   filterMatchCase: false,
   filterMatchWholeWord: false,

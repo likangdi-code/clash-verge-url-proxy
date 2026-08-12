@@ -54,6 +54,8 @@ import {
   selectProxyForUrl,
   createUrlProxyGroup,
   removeUrlProxyGroup,
+  restoreEntriesFromEnhance,
+  isUrlProxyName,
   type UrlProxyEntry,
 } from '@/services/url-proxy'
 
@@ -135,7 +137,7 @@ const UrlEntryRow = ({
   // 每个 entry 独立的视图状态（与"代理"页每个组独立的 HeadState 对齐）
   const [open, setOpen] = useState(false)
   const [showType, setShowType] = useState(true)
-  const [sortType, setSortType] = useState<ProxySortType>(0)
+  const [sortType, setSortType] = useState<ProxySortType>(1) // 首选排序方式：按延迟
   const [filterText, setFilterText] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -544,7 +546,11 @@ const UrlProxiesPage = () => {
         setAllProxies([
           'DIRECT',
           ...Object.keys(d.records).filter(
-            (n) => n !== 'GLOBAL' && n !== 'DIRECT' && n !== 'REJECT',
+            (n) =>
+              n !== 'GLOBAL' &&
+              n !== 'DIRECT' &&
+              n !== 'REJECT' &&
+              !isUrlProxyName(n),
           ),
         ])
       })
@@ -559,6 +565,19 @@ const UrlProxiesPage = () => {
   )
 
   const flush = useCallback(() => setEntries(getAllEntries()), [])
+
+  // 加载时从当前 profile 增强文件恢复条目：
+  // localStorage 跨 dev/release 不共享，URL-Proxy 组实际存于增强文件，
+  // 此步骤把真实存在的组反推回 localStorage，避免「网址代理」菜单显示为空。
+  useEffect(() => {
+    let cancelled = false
+    restoreEntriesFromEnhance().then(() => {
+      if (!cancelled) flush()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [flush])
 
   const handleAdd = useLockFn(async () => {
     const v = urlInput.trim()
@@ -575,10 +594,13 @@ const UrlProxiesPage = () => {
       if (ok) {
         showNotice.success(t('urlProxies.notices.addSuccess'))
       } else {
+        // 组创建失败：回滚刚写入的条目，避免出现"无分组的幽灵网址栏"
+        removeEntry(entry.id)
         showNotice.error(t('urlProxies.notices.addFail'))
       }
     } catch (e) {
       console.error(e)
+      removeEntry(entry.id)
       showNotice.error(t('urlProxies.notices.addFail'))
     } finally {
       setCreating(false)

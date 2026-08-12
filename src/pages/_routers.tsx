@@ -134,6 +134,12 @@ export const navItems = [
     ...createLazyRoute(() => import('./proxies')),
   },
   {
+    label: 'layout.components.navigation.tabs.urlProxies',
+    path: '/url-proxies',
+    icon: [<LinkRoundedIcon key="mui" />],
+    ...createLazyRoute(() => import('./url-proxies'), 'urlProxies'),
+  },
+  {
     label: 'layout.components.navigation.tabs.profiles',
     path: '/profile',
     icon: [<DnsRoundedIcon key="mui" />, <ProfilesSvg key="svg" />],
@@ -163,12 +169,6 @@ export const navItems = [
     path: '/unlock',
     icon: [<LockOpenRoundedIcon key="mui" />, <UnlockSvg key="svg" />],
     ...createLazyRoute(() => import('./unlock')),
-  },
-  {
-    label: 'layout.components.navigation.tabs.urlProxies',
-    path: '/url-proxies',
-    icon: [<LinkRoundedIcon key="mui" />],
-    ...createLazyRoute(() => import('./url-proxies'), 'urlProxies'),
   },
   {
     label: 'layout.components.navigation.tabs.settings',

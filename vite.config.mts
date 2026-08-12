@@ -7,7 +7,10 @@ import svgr from 'vite-plugin-svgr'
 
 export default defineConfig({
   root: 'src',
-  server: { port: 3000 },
+  // 显式绑定 IPv4 loopback：Node 24 默认把 localhost 解析为 ::1（仅 IPv6），
+  // WebView2 加载 http://localhost:3000 走 IPv4 会连接被拒 → 页面白屏。
+  // strictPort：端口被占时报错而非静默换端口（换端口会让 devUrl 失配再致白屏）。
+  server: { host: '127.0.0.1', port: 3000, strictPort: true },
   plugins: [
     svgr(),
     react(),

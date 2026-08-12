@@ -1,0 +1,71 @@
+name: macOS Build (Apple Silicon)
+
+# 手动触发：仓库 Actions 页 → 本 workflow → Run workflow
+# 产出：Clash.Verge_<version>_aarch64.dmg（M 芯片 / Apple Silicon）
+#
+# 说明：
+# - 无 Apple Developer 证书，不做代码签名/公证。首次打开需右键 → 打开绕过 Gatekeeper。
+# - 走与上游 release.yml 相同的 macos-latest runner，交叉编译 aarch64-apple-darwin
+#   target 即产出 M 芯片 dmg（上游已验证该流程）。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  HUSKY: 0
+
+jobs:
+  build-macos:
+    name: Build aarch64-apple-darwin (.dmg)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust (matches rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.95.0'
+          targets: aarch64-apple-darwin
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v1-rust'
+          key: 'macos-aarch64'
+          workspaces: '. -> target'
+          cache-all-crates: true
+          cache-workspace-crates: true
+
+      - name: Install Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.18.0'
+
+      - uses: pnpm/action-setup@v6
+        name: Install pnpm
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm i
+
+      - name: Prebuild (download mihomo core + resources)
+        run: pnpm run prebuild aarch64-apple-darwin
+
+      - name: Tauri build (unsigned)
+        run: pnpm tauri build --target aarch64-apple-darwin
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Clash-Verge-macOS-aarch64
+          path: |
+            target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            target/aarch64-apple-darwin/release/bundle/macos/*.app
