@@ -1,6 +1,8 @@
 name: Release Build (Win + macOS)
 
-# 手动触发（Actions 页 → Run workflow），或打 tag v*.*.* 自动触发。
+# 手动触发（Actions 页 → Run workflow）。已禁用 tag 自动触发：
+# 打 tag v*.*.* 会触发本 workflow，但缺 Apple 证书 / TAURI 私钥等 secrets 必然失败，
+# 且会重复消耗构建额度。需要构建时请在 Actions 页手动 Run workflow。
 # 产物：
 #   Windows x64/arm64 setup.exe + fixed_webview2 版
 #   macOS aarch64/x64 dmg
@@ -8,9 +10,9 @@ name: Release Build (Win + macOS)
 # 说明：无 Apple 证书，macOS 包不签名；无 TAURI 私钥，不生成 updater 签名。
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*.*.*'
+  # push:
+  #   tags:
+  #     - 'v*.*.*'
 
 permissions:
   contents: write
