@@ -544,19 +544,26 @@ export async function testProxyDelay(
   }
 }
 
-/** 自动测速：测试所有可用代理，可选择延迟最低的那个
+/** 自动测速：并发测试可用代理，可选择延迟最低的那个（增量式提前返回）
  *
- * 重构后：复用 `delayManager.checkListDelay` 走"代理"页的标准链路
+ * 复用 `delayManager.checkListDelay` 走"代理"页的标准链路：
  *  - 测试 URL = entry.url（对应当前 URL 域名的连通性）
  *  - 测速中状态为 -2，失败/超时为 1e6/0，成功为正整数
  *  - 进度通过 delayManager 通知订阅者（useProxyDelayState）自动刷新 UI
  *  - timeout 来自调用方（页面从 verge.default_latency_timeout 读取，与"代理"页同步）
- *  - selectBest=false 时仅测速（用于 autoSelect 关闭的栏），true 时测速并选最低
+ *  - selectBest=false 时仅测速（等全部完成），true 时测速并增量选最低
+ *
+ * 增量选择：低延迟节点通常先返回结果，无需等所有节点测完。
+ * 轮询 delayManager 缓存收集"成功延迟"（>0 且 <1e6）的节点，够
+ * collectTarget（默认 3，合理范围 2~5）个即从中选最低并提前返回；
+ * 全部测完仍不足则从全量缓存兜底。后台未完成的测速结果仍写缓存供 UI 刷新。
+ * 用轮询而非 group listener（页面 useFilterSort 已占用，避免覆盖）。
  */
 export async function autoTestAndSelectBest(
   entry: UrlProxyEntry,
   timeout: number = 10000,
   selectBest: boolean = true,
+  collectTarget: number = 3,
 ): Promise<string | null> {
   const allProxies = await fetchAllProxyNames()
   if (allProxies.length === 0) return null
@@ -576,19 +583,60 @@ export async function autoTestAndSelectBest(
     history: [],
   }))
 
-  // 批量测速（写入 delayManager cache，订阅者自动收到通知）
-  await delayManager.checkListDelay(items, entry.id, timeout)
+  // selectBest=false：只测速，不自动选择（等全部完成）
+  if (!selectBest) {
+    await delayManager.checkListDelay(items, entry.id, timeout)
+    return null
+  }
 
-  // selectBest=false：只测速，不自动选择
-  if (!selectBest) return null
+  const groupName = entry.id
+  const successful = new Set<string>()
+  let settled = false
+  let resolveSettled: () => void = () => {}
+  const settledPromise = new Promise<void>((resolve) => {
+    resolveSettled = resolve
+  })
 
-  // 从缓存里挑出有效延迟里最低的（>0 且 < 1e6；0 是超时、1e6 是错误）
+  // 从缓存收集"成功延迟"的节点（去重）；返回是否已够 collectTarget
+  const collect = (): boolean => {
+    for (const name of allProxies) {
+      if (successful.has(name)) continue
+      const u = delayManager.getDelayUpdate(name, groupName)
+      if (u && u.delay > 0 && u.delay < 1e6) successful.add(name)
+    }
+    return successful.size >= collectTarget
+  }
+
+  let pollTimer: number | undefined
+  const finish = () => {
+    if (settled) return
+    settled = true
+    if (pollTimer !== undefined) clearInterval(pollTimer)
+    resolveSettled()
+  }
+
+  // 启动批量测速（后台继续，不阻塞提前返回；结果仍写缓存供 UI 刷新）
+  delayManager
+    .checkListDelay(items, groupName, timeout)
+    .catch(() => {})
+    .finally(finish)
+
+  // 轮询缓存：够 collectTarget 个成功结果就提前收手
+  pollTimer = setInterval(() => {
+    if (collect()) finish()
+  }, 100)
+
+  // 先利用已有缓存立即收集一次
+  if (collect()) finish()
+
+  await settledPromise
+
+  // 从已测出的成功结果里选最低延迟
   let bestName: string | null = null
   let bestDelay = Number.POSITIVE_INFINITY
-  for (const name of allProxies) {
-    const d = delayManager.getDelayUpdate(name, entry.id)
-    if (!d) continue
-    if (d.delay > 0 && d.delay < 1e6 && d.delay < bestDelay) {
+  for (const name of successful) {
+    const d = delayManager.getDelayUpdate(name, groupName)
+    if (d && d.delay > 0 && d.delay < 1e6 && d.delay < bestDelay) {
       bestName = name
       bestDelay = d.delay
     }

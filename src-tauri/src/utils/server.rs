@@ -21,8 +21,27 @@ struct QueryParam {
     param: String,
 }
 
+#[derive(serde::Deserialize, Debug)]
+struct SaveQuery {
+    index: String,
+}
+
 // 关闭 embedded server 的信号发送端
 static SHUTDOWN_SENDER: OnceCell<Mutex<Option<oneshot::Sender<()>>>> = OnceCell::new();
+
+// 外部命令桥（/commands/profile-save、/commands/profile-enhance）的可选 token：
+// 设置环境变量 CLASH_VERGE_API_TOKEN 后，请求需带请求头 X-API-Token 匹配；未设置则放行（服务器仅绑定 127.0.0.1）。
+// 用途：让外部 CLI（如 clash-pick）能触发「写 profile 增强文件 + 校验 + reload」，实现网址代理组自动化。
+static API_TOKEN: OnceCell<Mutex<Option<std::string::String>>> = OnceCell::new();
+
+fn check_api_token(token: Option<std::string::String>) -> bool {
+    if let Some(guard) = API_TOKEN.get() {
+        if let Some(expected) = guard.lock().as_deref() {
+            return token.as_deref() == Some(expected);
+        }
+    }
+    true
+}
 
 /// check whether there is already exists
 pub async fn check_singleton() -> Result<()> {
@@ -64,6 +83,10 @@ pub fn embed_server() {
         .set(Mutex::new(Some(shutdown_tx)))
         .expect("failed to set shutdown signal for embedded server");
     let port = IVerge::get_singleton_port();
+
+    API_TOKEN
+        .set(Mutex::new(std::env::var("CLASH_VERGE_API_TOKEN").ok()))
+        .expect("failed to init api token");
 
     let visible = warp::path!("commands" / "visible").and_then(|| async {
         logging!(info, Type::Window, "检测到从单例模式恢复应用窗口");
@@ -112,7 +135,61 @@ pub fn embed_server() {
             ))
         });
 
-    let commands = visible.or(scheme).or(pac);
+    // 外部命令桥：保存 profile 文件（写增强文件 + 校验 + 若影响运行时则 reload）
+    // POST /commands/profile-save?index=<uid>，body 为文件内容（如 Groups/Rules 增强 YAML）
+    // 复用前端同路径 cmd::save_profile_file（走 CoreManager 全局单例，不依赖 AppHandle）
+    let profile_save = warp::path!("commands" / "profile-save")
+        .and(warp::query::<SaveQuery>())
+        .and(warp::header::optional::<std::string::String>("x-api-token"))
+        .and(warp::body::content_length_limit(1024 * 1024))
+        .and(warp::body::bytes())
+        .and_then(
+            |query: SaveQuery,
+             token: Option<std::string::String>,
+             body: bytes::Bytes| async move {
+                if !check_api_token(token) {
+                    return Ok::<_, warp::Rejection>(warp::reply::with_status(
+                        "unauthorized".to_string(),
+                        warp::http::StatusCode::UNAUTHORIZED,
+                    ));
+                }
+                let file_data = std::string::String::from_utf8_lossy(&body).to_string();
+                match crate::cmd::save_profile_file(query.index, Some(file_data.into())).await {
+                    Ok(outcome) => Ok::<_, warp::Rejection>(warp::reply::with_status(
+                        serde_json::to_string(&outcome).unwrap_or_default(),
+                        warp::http::StatusCode::OK,
+                    )),
+                    Err(e) => Ok::<_, warp::Rejection>(warp::reply::with_status(
+                        format!("save_profile_file error: {e}"),
+                        warp::http::StatusCode::BAD_REQUEST,
+                    )),
+                }
+            });
+
+    // 外部命令桥：触发「增强配置 + reload」（校验失败不弹通知，silent=true）
+    // GET /commands/profile-enhance
+    let profile_enhance = warp::path!("commands" / "profile-enhance")
+        .and(warp::header::optional::<std::string::String>("x-api-token"))
+        .and_then(|token: Option<std::string::String>| async move {
+            if !check_api_token(token) {
+                return Ok::<_, warp::Rejection>(warp::reply::with_status(
+                    "unauthorized".to_string(),
+                    warp::http::StatusCode::UNAUTHORIZED,
+                ));
+            }
+            match crate::cmd::enhance_profiles(Some(true)).await {
+                Ok(outcome) => Ok::<_, warp::Rejection>(warp::reply::with_status(
+                    serde_json::to_string(&outcome).unwrap_or_default(),
+                    warp::http::StatusCode::OK,
+                )),
+                Err(e) => Ok::<_, warp::Rejection>(warp::reply::with_status(
+                    format!("enhance_profiles error: {e}"),
+                    warp::http::StatusCode::BAD_REQUEST,
+                )),
+            }
+        });
+
+    let commands = visible.or(scheme).or(pac).or(profile_save).or(profile_enhance);
 
     AsyncHandler::spawn(move || async move {
         warp::serve(commands)
