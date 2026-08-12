@@ -45,11 +45,20 @@ Clash Verge 是一款基于 **Rust + Tauri 2** 的 [Clash Meta (mihomo)](https:/
 | :--- | :--- |
 | Windows x64 | `Clash.Verge_*_x64-setup.exe` |
 | Windows ARM64 | `Clash.Verge_*_arm64-setup.exe` |
+| Windows x64（内置 WebView2） | `Clash.Verge_*_x64_fixed_webview2-setup.exe` |
+| Windows ARM64（内置 WebView2） | `Clash.Verge_*_arm64_fixed_webview2-setup.exe` |
 | macOS (Apple Silicon) | `Clash.Verge_*_aarch64.dmg` |
 | macOS (Intel) | `Clash.Verge_*_x64.dmg` |
-| Linux | `.deb` / `.rpm` 包 |
 
-> ⚠️ macOS 版未签名（无 Apple 开发者证书）：首次打开请 **右键 → 打开 → 仍要打开**。
+> 内置 WebView2 版体积较大（约 200MB），仅在系统无法安装 WebView2 或企业环境使用。
+
+> ⚠️ **macOS 安装**：本版本未签名、未公证（无 Apple 开发者证书）。首次打开可能提示「无法验证开发者」或「已损坏，无法打开」——这是 Gatekeeper 拦截，**文件并未损坏**。请执行：
+>
+> ```bash
+> xattr -dr com.apple.quarantine "/Applications/Clash Verge.app"
+> ```
+>
+> 然后正常打开；或右键点击应用 → 打开 → 仍要打开。
 
 ## 特性
 
