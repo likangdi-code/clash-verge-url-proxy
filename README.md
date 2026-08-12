@@ -37,6 +37,21 @@ Clash Verge 是一款基于 **Rust + Tauri 2** 的 [Clash Meta (mihomo)](https:/
 - **持久化**：网址与节点映射保存在本地，跨环境自动从订阅增强文件恢复。
 - **不干扰代理页**：`URL-Proxy-*` 组已被过滤，「代理」页显示不受影响。
 
+## 配套工具：Clash Pick CLI
+
+[Clash Pick](https://github.com/likangdi-code/clash-pick) 是本仓库「网址代理」功能的 **CLI 配套工具**：让 agent / 脚本在下载前针对下载链接自动选择延迟最低的节点，再走代理下载。Node 零依赖，一行命令安装：
+
+```powershell
+irm https://raw.githubusercontent.com/likangdi-code/clash-pick/main/install.ps1 | iex
+```
+
+使用示例：
+
+```bash
+clash-pick pick "https://example.com/big-file.zip"     # 自动选最低延迟节点
+curl --proxy http://127.0.0.1:7897 -L -O "https://example.com/big-file.zip"
+```
+
 ## 下载
 
 到 [Release 页面](https://github.com/likangdi-code/clash-verge-url-proxy/releases) 下载对应平台的安装包：
