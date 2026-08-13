@@ -86,15 +86,29 @@ curl --proxy http://127.0.0.1:7897 -L -o big-file.zip "https://example.com/big-f
 
 > ⚠️ **macOS 安装**：本版本未签名、未公证（无 Apple 开发者证书），首次打开会被 Gatekeeper 拦截（提示「已损坏，无法打开」——这是拦截，**文件并未损坏**）。
 >
-> **推荐：一键安装（两步）**（下载 `.dmg` 与 [Install.command](./Install.command) 后）：
+> **先理解两点**：
+> - 双击 `.dmg` 只是把它**挂载**成一个虚拟磁盘（桌面出现「Clash Verge」磁盘图标），此时 app 还在磁盘里，**还没装进系统**。
+> - 安装 = 把 `Clash Verge.app` **拖进「应用程序」**文件夹。下面两条路径任选。
 >
-> 1. 双击 `.dmg` 挂载成虚拟磁盘（桌面出现「Clash Verge」磁盘图标）
-> 2. 双击 **`Install.command`**（若被拦截：右键 → 打开 → 仍要打开，只需一次），脚本自动完成「复制到应用程序 → 清除隔离 → 重新签名 → 启动」
+> **路径 A：一键安装（脚本自动，推荐）**
+>
+> 1. 双击 `.dmg` 挂载（桌面出现「Clash Verge」磁盘图标）
+> 2. 双击 **`Install.command`**（若被拦截：右键 → 打开 → 仍要打开），脚本会**自动**从磁盘复制 app 到「应用程序」，并完成「清除隔离 → 重新签名 → 启动」，无需手动拖拽
+>
+> **路径 B：手动安装**
+>
+> 1. 双击 `.dmg` 挂载
+> 2. 打开磁盘图标，把 `Clash Verge.app` 拖进「应用程序」文件夹
+> 3. 终端执行：
+>
+> ```bash
+> sudo xattr -cr "/Applications/Clash Verge.app"
+> sudo codesign --force --deep --sign - "/Applications/Clash Verge.app"
+> open "/Applications/Clash Verge.app"
+> ```
 >
 > > 💡 Windows / Linux 用户无需下载 `Install.command`。
-> > 💡 若未挂载 dmg 就直接运行脚本，会提示「未找到 Clash Verge.app」——把 app 拖进「应用程序」后重新运行脚本即可。
->
-> **手动安装**（先把 `Clash Verge.app` 拖入「应用程序」，再执行）：
+> > 💡 若运行脚本时提示「未找到 Clash Verge.app」：说明没挂载 dmg，或 app 不在脚本能找到的位置。按**路径 B** 手动拖进「应用程序」后再运行脚本即可。
 >
 > ```bash
 > sudo xattr -cr "/Applications/Clash Verge.app"
