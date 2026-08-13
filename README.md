@@ -18,6 +18,8 @@ Clash Verge 是一款基于 **Rust + Tauri 2** 的 [Clash Meta (mihomo)](https:/
 
 ![预览](./docs/preview.png)
 
+![网址代理页](./docs/url-proxies-page.png)
+
 ## 新增功能：网址代理
 
 「网址代理」允许你为**任意网址**单独指定代理节点，而不是让所有流量都走同一个代理组。
