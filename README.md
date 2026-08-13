@@ -86,9 +86,12 @@ curl --proxy http://127.0.0.1:7897 -L -o big-file.zip "https://example.com/big-f
 
 > ⚠️ **macOS 安装**：本版本未签名、未公证（无 Apple 开发者证书），首次打开会被 Gatekeeper 拦截（提示「已损坏，无法打开」——这是拦截，**文件并未损坏**）。**推荐一键安装**：
 >
-> 1. 下载 [Install.command](./Install.command)（或从 Release 页面下载）
-> 2. 双击运行（若被拦截，右键 → 打开 → 仍要打开）
-> 3. 脚本自动完成「复制到应用程序 → 清除隔离 → 重新签名 → 启动」
+> 1. 下载 `.dmg` 和 [Install.command](./Install.command)（或从 Release 页面下载）
+> 2. **先双击 `.dmg`**——系统会把它**挂载**成一个虚拟磁盘（桌面出现「Clash Verge」磁盘图标），这样 Install.command 才能找到里面的 app
+> 3. 再双击运行 `Install.command`（若被拦截，右键 → 打开 → 仍要打开）
+> 4. 脚本自动完成「复制到应用程序 → 清除隔离 → 重新签名 → 启动」
+>
+> > 💡 如果没挂载 dmg 就直接运行脚本，会提示「未找到 Clash Verge.app」——把 `Clash Verge.app` 拖进「应用程序」后重新运行脚本即可。
 >
 > 手动方式（终端执行，需先把 `Clash Verge.app` 拖入「应用程序」）：
 >
