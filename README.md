@@ -84,16 +84,17 @@ curl --proxy http://127.0.0.1:7897 -L -o big-file.zip "https://example.com/big-f
 > 内置 WebView2 版体积较大（约 200MB），仅在系统无法安装 WebView2 或企业环境使用。
 > Linux 目前仅提供 amd64（x64）安装包。
 
-> ⚠️ **macOS 安装**：本版本未签名、未公证（无 Apple 开发者证书），首次打开会被 Gatekeeper 拦截（提示「已损坏，无法打开」——这是拦截，**文件并未损坏**）。**推荐一键安装**：
+> ⚠️ **macOS 安装**：本版本未签名、未公证（无 Apple 开发者证书），首次打开会被 Gatekeeper 拦截（提示「已损坏，无法打开」——这是拦截，**文件并未损坏**）。
 >
-> 1. 下载 `.dmg` 和 [Install.command](./Install.command)（或从 Release 页面下载）
-> 2. **先双击 `.dmg`**——系统会把它**挂载**成一个虚拟磁盘（桌面出现「Clash Verge」磁盘图标），这样 Install.command 才能找到里面的 app
-> 3. 再双击运行 `Install.command`（若被拦截，右键 → 打开 → 仍要打开）
-> 4. 脚本自动完成「复制到应用程序 → 清除隔离 → 重新签名 → 启动」
+> **推荐：一键安装（两步）**（下载 `.dmg` 与 [Install.command](./Install.command) 后）：
 >
-> > 💡 如果没挂载 dmg 就直接运行脚本，会提示「未找到 Clash Verge.app」——把 `Clash Verge.app` 拖进「应用程序」后重新运行脚本即可。
+> 1. 双击 `.dmg` 挂载成虚拟磁盘（桌面出现「Clash Verge」磁盘图标）
+> 2. 双击 **`Install.command`**（若被拦截：右键 → 打开 → 仍要打开，只需一次），脚本自动完成「复制到应用程序 → 清除隔离 → 重新签名 → 启动」
 >
-> 手动方式（终端执行，需先把 `Clash Verge.app` 拖入「应用程序」）：
+> > 💡 Windows / Linux 用户无需下载 `Install.command`。
+> > 💡 若未挂载 dmg 就直接运行脚本，会提示「未找到 Clash Verge.app」——把 app 拖进「应用程序」后重新运行脚本即可。
+>
+> **手动安装**（先把 `Clash Verge.app` 拖入「应用程序」，再执行）：
 >
 > ```bash
 > sudo xattr -cr "/Applications/Clash Verge.app"
