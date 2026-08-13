@@ -84,33 +84,45 @@ curl --proxy http://127.0.0.1:7897 -L -o big-file.zip "https://example.com/big-f
 > 内置 WebView2 版体积较大（约 200MB），仅在系统无法安装 WebView2 或企业环境使用。
 > Linux 目前仅提供 amd64（x64）安装包。
 
-> ⚠️ **macOS 安装**：本版本未签名、未公证（无 Apple 开发者证书），首次打开会被 Gatekeeper 拦截（提示「已损坏，无法打开」——这是拦截，**文件并未损坏**）。
+> ⚠️ **macOS 安装教程**（Apple M 芯片 / Intel 均适用）：本版本**未签名、未公证**（无 Apple 开发者证书），首次打开会被 Gatekeeper 拦截。安装时会看到一些「拦截提示」，**均为正常现象，文件本身没有损坏**，按下面步骤操作即可。
 >
-> **先理解两点**：
-> - 双击 `.dmg` 只是把它**挂载**成一个虚拟磁盘（桌面出现「Clash Verge」磁盘图标），此时 app 还在磁盘里，**还没装进系统**。
-> - 安装 = 把 `Clash Verge.app` **拖进「应用程序」**文件夹。下面两条路径任选。
+> **第 1 步：下载两个文件**
 >
-> **路径 A：一键安装（脚本自动，推荐）**
+> - **Clash 本体（.dmg）**：按你的芯片选对应版本——
+>   - Apple M 芯片 → `Clash.Verge_2.5.3_macOS_Apple_M_Chip.dmg`
+>   - Intel → `Clash.Verge_2.5.3_macOS_Intel_Chip.dmg`
+> - **一键安装脚本** → `Install.command`（两种芯片通用）
 >
-> 1. 双击 `.dmg` 挂载（桌面出现「Clash Verge」磁盘图标）
-> 2. 双击 **`Install.command`**（若被拦截：右键 → 打开 → 仍要打开），脚本会**自动**从磁盘复制 app 到「应用程序」，并完成「清除隔离 → 重新签名 → **启动 Clash app**」，无需手动拖拽。
+> **第 2 步：双击 `.dmg` 挂载**（这些提示是正常的）
 >
-> 运行完脚本，**Clash Verge 会自动打开**（主界面弹出）——dmg 磁盘此时已无用，可右键「推出」卸载。
+> - 双击后桌面出现「Clash Verge」磁盘图标 → **正常**，这是把 dmg 挂载成虚拟磁盘，app 还没装进系统
+> - 若弹「要打开从互联网下载的磁盘映像吗？」→ 点「**打开**」→ 正常
+> - 若弹「无法打开，因为它来自身份不明的开发者」→ 正常（未签名），点「打开」
 >
-> **路径 B：手动安装**
+> **第 3 步：在终端运行安装脚本**（推荐方式，能绕过双击时的权限限制）
 >
-> 1. 双击 `.dmg` 挂载
-> 2. 打开磁盘图标，把 `Clash Verge.app` 拖进「应用程序」文件夹
-> 3. 终端执行：
+> 打开「终端」（`⌘+空格` 搜索 Terminal），执行：
 >
 > ```bash
-> sudo xattr -cr "/Applications/Clash Verge.app"
-> sudo codesign --force --deep --sign - "/Applications/Clash Verge.app"
-> open "/Applications/Clash Verge.app"
+> bash ~/Downloads/Install.command
 > ```
 >
-> > 💡 Windows / Linux 用户无需下载 `Install.command`。
-> > 💡 若运行脚本时提示「未找到 Clash Verge.app」：说明没挂载 dmg，或 app 不在脚本能找到的位置。按**路径 B** 手动拖进「应用程序」后再运行脚本即可。
+> （若文件下载到别处，把路径改成实际位置，如 `bash ~/Desktop/Install.command`）
+>
+> - 脚本自动完成：从挂载磁盘复制 app → 清除隔离 → 重新签名 → **启动 Clash app**
+> - 终端里若提示输入密码（`Password:`）→ 输入你的 Mac 登录密码（输入时不显示，正常）
+> - 完成后 **Clash Verge 会自动打开**（主界面弹出）→ 安装成功
+>
+> **常见问题**：
+>
+> - 「未找到 Clash Verge.app」→ 说明 dmg 没挂载，或 app 不在脚本能找到的位置。先确认第 2 步的磁盘图标已出现，再重跑脚本
+> - 想重新安装/更新 → 退出 Clash 后重跑本脚本即可（会自动覆盖安装）
+> - 安装完成后，桌面的 dmg 磁盘图标已无用 → 右键「推出」卸载
+>
+> **手动安装（备选，不用脚本）**：
+>
+> 1. 双击 `.dmg` 挂载，把 `Clash Verge.app` 拖进「应用程序」文件夹
+> 2. 终端执行：
 >
 > ```bash
 > sudo xattr -cr "/Applications/Clash Verge.app"
