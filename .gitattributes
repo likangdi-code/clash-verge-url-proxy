@@ -1,2 +1,5 @@
 .github/workflows/*.lock.yml linguist-generated=true merge=ours
 Changelog.md merge=union
+
+# macOS 一键安装脚本：必须 LF 换行（CRLF 会破坏 shebang，双击无法运行）
+Install.command text eol=lf
