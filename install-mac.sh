@@ -49,16 +49,36 @@ else
   API="https://api.github.com/repos/$REPO/releases/tags/$TAG_OR_LATEST"
 fi
 say "获取 Release 信息（${TAG_OR_LATEST}）..."
-json="$(curl -fsSL --max-time 30 "$API" 2>/dev/null)" || fail "获取 Release 信息失败（网络问题或版本不存在），请检查网络后重试"
-
+json="$(curl -fsSL --max-time 30 "$API" 2>/dev/null || true)"
 marker="\"name\":\"[^\"]*${CHIP}\\.dmg\""
 name="$(printf '%s' "$json" | grep -oE "$marker" | head -1 | sed -E 's/"name":"(.*)"/\1/' || true)"
-[ -n "$name" ] || fail "Release 中未找到 ${CHIP} 对应的 dmg"
+digest=""
+dl_url=""
+if [ -n "$name" ]; then
+  rest="${json#*"$name"}"
+  digest="$(printf '%s' "$rest" | grep -oE '"digest":"sha256:[0-9a-f]+"' | head -1 | cut -d: -f3 | tr -d '"' || true)"
+  dl_url="$(printf '%s' "$rest" | grep -oE '"browser_download_url":"[^"]*"' | head -1 | sed -E 's/"browser_download_url":"(.*)"/\1/' || true)"
+fi
 
-rest="${json#*"$name"}"
-digest="$(printf '%s' "$rest" | grep -oE '"digest":"sha256:[0-9a-f]+"' | head -1 | cut -d: -f3 | tr -d '"' || true)"
-dl_url="$(printf '%s' "$rest" | grep -oE '"browser_download_url":"[^"]*"' | head -1 | sed -E 's/"browser_download_url":"(.*)"/\1/' || true)"
-[ -n "$digest" ] && [ -n "$dl_url" ] || fail "解析 Release 元数据失败"
+# 兜底：GitHub API 被拦截/限流/超时时，改用仓库内 SHA256SUMS 清单
+#（raw.githubusercontent.com 走 Fastly CDN，与下载脚本同源，国内网络通常可直连）
+if [ -z "$name" ] || [ -z "$digest" ] || [ -z "$dl_url" ]; then
+  warn "GitHub API 获取失败（可能被网络拦截/限流），改用仓库 SHA256SUMS 清单..."
+  sums="$(curl -fsSL --max-time 30 "https://raw.githubusercontent.com/$REPO/main/SHA256SUMS" 2>/dev/null || true)"
+  line="$(printf '%s' "$sums" | grep -F "${CHIP}.dmg" | head -1 || true)"
+  if [ -n "$line" ]; then
+    tag="$(printf '%s' "$line" | awk '{print $1}')"
+    digest="$(printf '%s' "$line" | awk '{print $2}')"
+    name="$(printf '%s' "$line" | awk '{print $3}')"
+    dl_url="https://github.com/$REPO/releases/download/$tag/$name"
+    if [ "$TAG_OR_LATEST" != "latest" ] && [ "$tag" != "$TAG_OR_LATEST" ]; then
+      fail "SHA256SUMS 只含最新版（$tag），无法校验你指定的 $TAG_OR_LATEST；请改用默认 latest 或稍后重试"
+    fi
+  else
+    fail "无法获取安装元数据（GitHub API 与 SHA256SUMS 均失败）。API 响应开头：$(printf '%s' "$json" | tr '\n' ' ' | head -c 120)"
+  fi
+fi
+[ -n "$digest" ] && [ -n "$dl_url" ] || fail "解析安装元数据失败"
 say "  版本资产   : ${name}"
 say "  官方 sha256: ${digest}"
 

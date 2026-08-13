@@ -1,0 +1,13 @@
+# Clash Verge（网址代理版）Release 资产 sha256 清单
+# 格式: <tag> <sha256> <asset-name>
+# 由发布流程更新（每次发版后把 API 的 digest 抄进来）；仅含最新版。
+# install-mac.sh 在 GitHub API 不可用/被拦截时，回退读取本文件获取官方哈希。
+v2.5.3  c9fb376f87cfd3eaf47858efe35175ce5ebef97a18de549c99e2505a50764201  Clash.Verge_2.5.3_macOS_Apple_M_Chip.dmg
+v2.5.3  2b6fcfb0338a334e7e1c7f8279ad487bfaba72a5a414a70cc4c0818aacd4783e  Clash.Verge_2.5.3_macOS_Intel_Chip.dmg
+v2.5.3  5ae28cc0c13b49759632dbd022e2780da87ced6d374d28370c04fe8a3a66f7df  Clash.Verge_2.5.3_Windows_x64-setup.exe
+v2.5.3  6d89c17ef29a5d20c4c88c66bbbc8e2caf4764aac83b907fb98b9b5c2de0cdb8  Clash.Verge_2.5.3_Windows_x64_WebView2-setup.exe
+v2.5.3  e9e4965e44316c31d14fcc1434a32d231851e56417438072f67bf0be923b4492  Clash.Verge_2.5.3_Windows_arm64-setup.exe
+v2.5.3  22e565c6d04e54ea5aa3441bd3ef0dc050e5ca16dbe0457f765f070bca258afb  Clash.Verge_2.5.3_Windows_arm64_WebView2-setup.exe
+v2.5.3  3ffd9103becf62861e5683911c8072b4200a8a776124e2966bcb35263cd30e90  Clash.Verge_2.5.3_Linux_amd64.deb
+v2.5.3  d3a109f72be3f8cc0d322792ad1d06ffe6f86bc188ca45c1549a5c92d4f55b91  Clash.Verge-2.5.3-Linux_x86_64.rpm
+v2.5.3  dc2a968e03433a6f34753f1d06cd7a015d0ca5e5f842318acbcb68b24b31ab01  Install.command
