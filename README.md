@@ -86,6 +86,22 @@ curl --proxy http://127.0.0.1:7897 -L -o big-file.zip "https://example.com/big-f
 
 > ⚠️ **macOS 安装教程**（Apple M 芯片 / Intel 均适用）：本版本**未签名、未公证**（无 Apple 开发者证书），首次打开会被 Gatekeeper 拦截。安装时会看到一些「拦截提示」，**均为正常现象，文件本身没有损坏**，按下面步骤操作即可。
 >
+> **方式一：一条指令自动安装（推荐）** —— 不用手动下载，自动完成：下载 + 校验 + 挂载 + 重签名 + 启动
+>
+> 打开「终端」（`⌘+空格` 搜索 "终端"），复制以下命令**一次性粘贴**回车：
+>
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/likangdi-code/clash-verge-url-proxy/main/install-mac.sh | bash
+> ```
+>
+> - 脚本自动检测芯片（Apple M / Intel），从 Release 下载对应 dmg，并与 GitHub 官方 sha256 校验一致后才安装
+> - 本地已下载且校验一致 → 自动跳过；哈希不一致 → 自动重新下载
+> - 装指定版本：`curl -fsSL https://raw.githubusercontent.com/likangdi-code/clash-verge-url-proxy/main/install-mac.sh | bash -s v2.5.2`
+> - 终端提示 `Password:` → 输入 **Mac 登录密码**（输入时不显示，正常）
+> - 完成后 **Clash Verge 会自动打开**（主界面弹出）→ **安装成功**
+>
+> **方式二：手动下载 + 运行脚本（备选，不想用一键命令时）**
+>
 > **第 1 步：下载两个文件**
 >
 > - **Clash 本体（.dmg）**：按你的芯片选对应版本——
